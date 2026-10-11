@@ -15,7 +15,7 @@ const nick = d => d.nickname || d.user?.nickname || d.user?.uniqueId || d.unique
 
 function room(user) {
   if (rooms.has(user)) return rooms.get(user);
-  const r = { clients: new Set(), conn: new Conn(user), retry: null, idle: null };
+  const r = { clients: new Set(), conn: new Conn(user, {}), retry: null, idle: null };
   const send = obj => { const m = JSON.stringify(obj); r.clients.forEach(c => c.readyState === 1 && c.send(m)); };
   const connect = () => r.conn.connect()
     .then(() => console.log('terhubung:', user))
@@ -36,7 +36,8 @@ function room(user) {
 wss.on('connection', (ws, req) => {
   const u = (new URL(req.url, 'http://x').searchParams.get('u') || '').replace(/^@/, '');
   if (!u || (ALLOWED.length && !ALLOWED.includes(u.toLowerCase()))) { ws.close(1008, 'tidak diizinkan'); return; }
-  const r = room(u);
+  let r;
+  try { r = room(u); } catch (e) { console.error('gagal membuat koneksi:', e.message); ws.close(1011, 'bridge error'); return; }
   clearTimeout(r.idle);
   r.clients.add(ws);
   ws.on('close', () => {
@@ -47,5 +48,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+process.on('uncaughtException', e => console.error('error tak tertangani:', e.message));
+process.on('unhandledRejection', e => console.error('janji ditolak:', e && e.message));
 setInterval(() => wss.clients.forEach(c => c.ping()), 30000);
 server.listen(process.env.PORT || 8081, () => console.log('bridge online jalan'));
